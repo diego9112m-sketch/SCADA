@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard SCADA - Light</title>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Canvas Gauges -->
+    <script src="https://cdn.jsdelivr.net/npm/canvas-gauges@2.1.7/gauge.min.js"></script>
+</head>
+<body class="light-theme">
+    
+    <!-- 1. Login Overlay -->
+    <div id="login-overlay" class="overlay active">
+        <div class="login-box card-shadow">
+            <div class="login-header">
+                <div class="brand-logo">SCADA<span>SYS</span></div>
+                <h2>Bienvenido</h2>
+                <p>Ingresa tus credenciales</p>
+            </div>
+            <form id="login-form">
+                <div class="form-group">
+                    <label>Perfil de Acceso</label>
+                    <div class="role-selector">
+                        <label class="radio-label"><input type="radio" name="role" value="Tecnico" checked> Técnico</label>
+                        <label class="radio-label"><input type="radio" name="role" value="Cliente"> Cliente</label>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="username">Usuario</label>
+                    <input type="text" id="username" placeholder="Usuario" value="admin" required>
+                </div>
+                <div class="form-group">
+                    <label for="password">Contraseña</label>
+                    <input type="password" id="password" placeholder="••••••••" value="password" required>
+                </div>
+                <button type="submit" class="btn-primary">Iniciar Sesión</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- 2. Home View -->
+    <div id="home-view" class="home-layout hidden">
+        <header class="topbar card-shadow">
+            <div class="brand-logo">SCADA<span>SYS</span></div>
+            <div class="user-info">
+                <div class="time-display" id="home-time">00:00:00</div>
+                <div class="user-details">
+                    <span class="display-username">Usuario</span>
+                    <span class="display-role badge">Rol</span>
+                </div>
+                <button class="btn-outline logout-btn">Salir</button>
+            </div>
+        </header>
+        <main class="home-content">
+            <h2 class="page-title">Instalaciones Disponibles</h2>
+            <p class="page-subtitle">Selecciona una planta para ver su esquema y métricas detalladas.</p>
+            <div id="installations-grid" class="cards-grid"></div>
+        </main>
+    </div>
+
+    <!-- 3. Dashboard View -->
+    <div id="app-container" class="app-layout hidden">
+        <!-- Sidebar -->
+        <aside class="sidebar card-shadow" id="app-sidebar">
+            <div class="sidebar-header">
+                <h3 id="sidebar-inst-name" class="inst-title">Planta</h3>
+            </div>
+            
+            <nav class="sidebar-nav">
+                <!-- Se agregó acceso rápido al Unifilar en la navegación -->
+                <div class="nav-title mt-2">ESQUEMA</div>
+                <ul class="nav-list">
+                    <li class="menu-item active" id="btn-show-unifilar">Diagrama Unifilar</li>
+                </ul>
+
+                <div class="nav-title mt-4">MEDICIONES</div>
+                <ul id="measurements-menu" class="nav-list">
+                    <li class="menu-item" data-view="instant">Tiempo Real (Gauges)</li>
+                    <li class="menu-item" data-view="voltage">Tendencia Voltajes</li>
+                    <li class="menu-item" data-view="current">Tendencia Corrientes</li>
+                    <li class="menu-item" data-view="power">Potencia (kW/kVAR)</li>
+                    <li class="menu-item" data-view="energy">Energía (kWh)</li>
+                    <li class="menu-item" data-view="harmonics">Armónicos (THD)</li>
+                </ul>
+            </nav>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Topbar Principal -->
+            <header class="topbar card-shadow">
+                <div class="topbar-left">
+                    <button id="toggle-sidebar" class="icon-btn" title="Ocultar/Mostrar Menú">☰</button>
+                    <button id="btn-back-home" class="btn-outline">← Volver al Inicio</button>
+                </div>
+                
+                <div class="user-info">
+                    <div class="status-indicator">
+                        <span class="status-dot"></span> Conectado
+                    </div>
+                    <!-- Dropdown de medidores, reubicado aquí -->
+                    <select id="meter-dropdown" class="meter-select">
+                        <option value="">Seleccione Medidor...</option>
+                    </select>
+                    <div class="time-display" id="system-time">00:00:00</div>
+                    <button class="btn-outline logout-btn">Salir</button>
+                </div>
+            </header>
+
+            <!-- Data Views Container -->
+            <div class="dashboard-views">
+                
+                <!-- View: Editor Diagrama Unifilar -->
+                <div id="view-unifilar" class="data-view active">
+                    <div class="panel-header">
+                        <h3 class="view-title">Diseñador Unifilar</h3>
+                        <p class="view-desc">Selecciona una herramienta y haz clic en la cuadrícula para diseñar la planta. Haz clic en un medidor para ver sus gráficas.</p>
+                    </div>
+                    <div class="unifilar-container card-shadow panel">
+                        <div class="unifilar-toolbar">
+                            <div class="action-group">
+                                <button id="btn-edit-unifilar" class="btn-outline">✏️ Editar</button>
+                                <button id="btn-save-unifilar" class="btn-primary hidden">💾 Guardar</button>
+                            </div>
+                            <div class="tools-group hidden" id="unifilar-tools">
+                                <button class="tool-btn active" data-tool="select" title="Seleccionar/Interactuar">👆 Interactuar</button>
+                                <button class="tool-btn" data-tool="rotate" title="Rotar Símbolo">🔄 Rotar</button>
+                                <div class="toolbar-divider"></div>
+                                <button class="tool-btn" data-tool="bus" title="Bus Infinito / Red">⚡ Red (Bus)</button>
+                                <button class="tool-btn" data-tool="trafo" title="Transformador">⭕ Trafo</button>
+                                <button class="tool-btn" data-tool="gen" title="Generador">⚙ Generador</button>
+                                <button class="tool-btn" data-tool="meter" title="Medidor">📟 Medidor</button>
+                                <button class="tool-btn" data-tool="load" title="Carga">🔽 Carga</button>
+                                <div class="toolbar-divider"></div>
+                                <button class="tool-btn" data-tool="line-v" title="Línea Vertical">↕ Línea V</button>
+                                <button class="tool-btn" data-tool="line-h" title="Línea Horizontal">↔ Línea H</button>
+                                <button class="tool-btn" data-tool="corner" title="Esquina / Codo">↪ Esquina</button>
+                                <button class="tool-btn" data-tool="t-join" title="Unión en T">┳ Unión T</button>
+                                <div class="toolbar-divider"></div>
+                                <button class="tool-btn danger" data-tool="erase" title="Borrar">🗑 Borrar</button>
+                            </div>
+                        </div>
+                        <div class="unifilar-grid-wrapper">
+                            <div class="unifilar-grid" id="unifilar-workspace">
+                                <!-- JS generará la cuadrícula -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- View: Tiempo Real -->
+                <div id="view-instant" class="data-view hidden">
+                    <h3 class="view-title">Medición Instantánea</h3>
+                    <div class="gauges-container card-shadow panel">
+                        <div class="gauge-wrapper"><canvas id="gauge-voltage"></canvas></div>
+                        <div class="gauge-wrapper"><canvas id="gauge-current"></canvas></div>
+                        <div class="gauge-wrapper"><canvas id="gauge-frequency"></canvas></div>
+                    </div>
+                </div>
+
+                <!-- View: Voltaje -->
+                <div id="view-voltage" class="data-view hidden">
+                    <div class="panel-header">
+                        <h3 class="view-title">Histórico de Voltajes</h3>
+                        <div class="time-tabs" data-target="voltage"></div>
+                    </div>
+                    <div class="chart-panel card-shadow panel"><canvas id="chart-voltage"></canvas></div>
+                </div>
+
+                <!-- View: Corriente -->
+                <div id="view-current" class="data-view hidden">
+                    <div class="panel-header">
+                        <h3 class="view-title">Histórico de Corrientes</h3>
+                        <div class="time-tabs" data-target="current"></div>
+                    </div>
+                    <div class="chart-panel card-shadow panel"><canvas id="chart-current"></canvas></div>
+                </div>
+
+                <!-- View: Potencia -->
+                <div id="view-power" class="data-view hidden">
+                    <div class="panel-header">
+                        <h3 class="view-title">Potencia (Activa, Reactiva, Aparente)</h3>
+                        <div class="time-tabs" data-target="power"></div>
+                    </div>
+                    <div class="chart-panel card-shadow panel"><canvas id="chart-power"></canvas></div>
+                </div>
+
+                <!-- View: Energía -->
+                <div id="view-energy" class="data-view hidden">
+                    <div class="panel-header">
+                        <h3 class="view-title">Consumo de Energía (kWh)</h3>
+                        <div class="time-tabs" data-target="energy"></div>
+                    </div>
+                    <div class="chart-panel card-shadow panel"><canvas id="chart-energy"></canvas></div>
+                </div>
+
+                <!-- View: Armónicos -->
+                <div id="view-harmonics" class="data-view hidden">
+                    <div class="panel-header">
+                        <h3 class="view-title">Distorsión Armónica (THDv / THDi)</h3>
+                        <div class="time-tabs" data-target="harmonics"></div>
+                    </div>
+                    <div class="chart-panel card-shadow panel"><canvas id="chart-harmonics"></canvas></div>
+                </div>
+
+            </div>
+        </main>
+    </div>
+
+    <!-- Modal Enlazar Medidor -->
+    <div id="link-meter-modal" class="overlay">
+        <div class="login-box card-shadow" style="padding: 1.5rem;">
+            <h3 style="margin-bottom: 1rem;">Enlazar Medidor Físico</h3>
+            <p style="font-size: 0.9rem; margin-bottom: 1rem; color: var(--text-muted);">Selecciona a qué medidor de esta planta corresponde este componente:</p>
+            <select id="modal-meter-select" style="width:100%; padding: 0.5rem; margin-bottom: 1.5rem;"></select>
+            <div style="display:flex; gap:1rem;">
+                <button id="modal-btn-cancel" class="btn-outline" style="flex:1;">Cancelar</button>
+                <button id="modal-btn-save" class="btn-primary" style="flex:1;">Guardar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="js/data.js?v=3"></script>
+    <script src="js/auth.js?v=3"></script>
+    <script src="js/unifilar.js?v=3"></script>
+    <script src="js/ui.js?v=3"></script>
+    <script src="js/main.js?v=3"></script>
+</body>
+</html>
