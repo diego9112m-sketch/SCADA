@@ -43,12 +43,49 @@ const Unifilar = {
 
         const btnEdit = document.getElementById('btn-edit-unifilar');
         const btnSave = document.getElementById('btn-save-unifilar');
+        const btnExport = document.getElementById('btn-export-unifilar');
 
         btnEdit.onclick = () => this.setEditMode(true);
         btnSave.onclick = () => {
             this.saveToLocal();
             this.setEditMode(false);
         };
+        if(btnExport) {
+            btnExport.onclick = () => this.exportConfig();
+        }
+    },
+
+    exportConfig() {
+        const config = {};
+        for(let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if(key.startsWith('unifilar_v2_')) {
+                const plantId = key.replace('unifilar_v2_', '');
+                try {
+                    config[plantId] = JSON.parse(localStorage.getItem(key));
+                } catch(e) {}
+            }
+        }
+        
+        // Si la planta actual no está en localStorage (porque no se ha guardado nunca, pero igual se editó algo en memoria)
+        if (this.plantId && !config[this.plantId] && Object.keys(this.gridState).length > 0) {
+            config[this.plantId] = {
+                bounds: this.bounds,
+                state: this.gridState
+            };
+        }
+
+        const jsContent = `/**\n * Configuraciones predeterminadas de los diagramas unifilares.\n * Reemplaza este archivo con el descargado desde la interfaz.\n */\nwindow.UNIFILAR_CONFIG = ${JSON.stringify(config, null, 4)};\n`;
+        
+        const blob = new Blob([jsContent], { type: "text/javascript" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "unifilar_config.js";
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
     },
 
     setEditMode(editing) {
@@ -350,6 +387,8 @@ const Unifilar = {
 
     loadFromLocal() {
         if(!this.plantId) return false;
+        
+        // Intentar cargar primero de localStorage (ediciones locales)
         const data = localStorage.getItem(`unifilar_v2_${this.plantId}`);
         if(data) {
             try {
@@ -358,9 +397,22 @@ const Unifilar = {
                 this.gridState = parsed.state;
                 return Object.keys(this.gridState).length > 0;
             } catch(e) {
-                console.error("Error al cargar datos del unifilar", e);
+                console.error("Error al cargar datos del unifilar desde local", e);
             }
         }
+        
+        // Si no hay en localStorage, intentar cargar de unifilar_config.js
+        if(window.UNIFILAR_CONFIG && window.UNIFILAR_CONFIG[this.plantId]) {
+            try {
+                const parsed = window.UNIFILAR_CONFIG[this.plantId];
+                this.bounds = parsed.bounds;
+                this.gridState = parsed.state;
+                return Object.keys(this.gridState).length > 0;
+            } catch(e) {
+                console.error("Error al cargar datos de UNIFILAR_CONFIG", e);
+            }
+        }
+        
         return false;
     },
 
